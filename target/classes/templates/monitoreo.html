@@ -1,0 +1,1562 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Monitoreo Sensores</title>
+
+    <script src="https://cdn.jsdelivr.net/npm/echarts/dist/echarts.min.js"></script>
+
+    <style>
+
+		body{
+		    margin:0;
+		    padding:25px;
+		    font-family:Arial, Helvetica, sans-serif;
+		    background:#f5f7fa;
+		}
+
+		.header{
+
+		    background:white;
+		    border-radius:12px;
+		    padding:20px;
+		    margin-bottom:25px;
+
+		    box-shadow:0 2px 10px rgba(0,0,0,.08);
+
+		}
+
+		h2{
+
+		    margin:0;
+		    text-align:center;
+		    font-size:30px;
+		    color:#1f2937;
+
+		}
+		
+		.filtros-horas{
+		    display:flex;
+		    justify-content:center;
+		    align-items:center;
+		    gap:15px;
+		}
+
+		.filtros-horas label{
+		    font-weight:bold;
+		    color:#555;
+		}
+
+		.filtros-horas input[type=number]{
+		    width:70px;
+		    padding:8px 10px;
+		    border:1px solid #CCC;
+		    border-radius:6px;
+		    font-size:14px;
+		    text-align:center;
+		}
+
+		.filtros{
+
+		    margin-top:20px;
+
+		    display:flex;
+
+		    justify-content:center;
+
+		    align-items:center;
+
+		    gap:15px;
+
+		    flex-wrap:wrap;
+
+		}
+
+		.filtros label{
+
+		    font-weight:bold;
+
+		    color:#555;
+
+		}
+
+		input[type=date]{
+
+		    padding:8px 10px;
+
+		    border:1px solid #CCC;
+
+		    border-radius:6px;
+
+		    font-size:14px;
+
+		}
+
+		button{
+
+		    background:#1976d2;
+
+		    color:white;
+
+		    border:none;
+
+		    padding:10px 18px;
+
+		    border-radius:6px;
+
+		    cursor:pointer;
+
+		    font-weight:bold;
+
+		    transition:.3s;
+
+		}
+
+		button:hover{
+
+		    background:#125ea9;
+
+		}
+
+		.contenedor{
+
+		    display:flex;
+
+		    gap:25px;
+
+		    justify-content:center;
+
+		    margin-bottom:25px;
+
+		    flex-wrap:wrap;
+
+		}
+
+		.grafica{
+
+		    width:600px;
+
+		    height:500px;
+
+		    background:white;
+
+		    border-radius:12px;
+
+		    box-shadow:0 2px 12px rgba(0,0,0,.08);
+
+		    padding:15px;
+
+		}
+		
+		.selector-tanque {
+		    display: flex;
+		    align-items: center;
+		    justify-content: center;
+		    gap: 10px;
+		}
+
+		.selector-tanque label {
+		    margin: 0;
+		    font-size: 24px;
+		    font-weight: bold;
+		    color: #555;
+		}
+
+		.selector-tanque select {
+		    padding: 8px 10px;
+		    border: 1px solid #CCC;
+		    border-radius: 6px;
+		    font-size: 22px;
+		    background: white;
+		    min-width: 220px;
+		    text-align: center;
+		}
+		
+		
+		.fila-tanque-horas{
+		    margin-top:20px;
+		    display:flex;
+		    justify-content:center;
+		    align-items:center;
+		    flex-wrap:wrap;
+		    gap:60px;
+		}
+
+    </style>
+
+</head>
+
+<body>
+
+	<div class="header">
+
+	    <h2 th:text="${nombreLocal}"></h2>
+		<!--  <h2 th:text="${nombreTanque}"></h2> -->
+		<div class="fila-tanque-horas">
+
+		    <div id="selectorTanque" class="selector-tanque">
+		        <label for="cmbTanque">Tanque</label>
+		        <select id="cmbTanque">
+		            <option value="">Cargando tanques...</option>
+		        </select>
+		    </div>
+
+		    <div class="filtros-horas">
+		        <label for="cantidadHoras">Digite la cantidad de horas</label>
+		        <input type="number" id="cantidadHoras" min="1" value="1">
+		        <button onclick="consultarPorHoras()">Consultar</button>
+		    </div>
+
+		</div>
+		
+	    <div class="filtros">
+
+	        <label>Fecha inicial</label>
+
+	        <input type="datetime-local" id="fechaInicio">
+
+	        <label>Fecha final</label>
+
+	        <input type="datetime-local" id="fechaFin">
+
+			<button onclick="consultar()">
+			    Consultar
+			</button>
+
+	    </div>
+
+	</div>
+
+<div class="contenedor">
+
+    <div id="chartNivel" class="grafica"></div>
+
+    <div id="chartPh" class="grafica"></div>
+
+	
+	
+</div>
+
+<div class="contenedor">
+
+   <div id="chartTurbiedad" class="grafica"></div>
+	
+   <div id="chartCloroResidual" class="grafica"></div>
+</div>
+
+<div class="contenedor">
+
+   <div id="chartConductividad" class="grafica"></div>
+	
+   <div id="chartTemperatura" class="grafica"></div>
+</div>
+
+<div class="contenedor">
+
+   <div id="chartSeñalWifi" class="grafica"></div>
+	
+   <div id="chartHumedad" class="grafica"></div>
+</div>
+
+<script th:inline="javascript">
+	
+	const parametros = new URLSearchParams(window.location.search);
+	const idAlerta = parametros.get("idAlerta");
+	
+	console.log("ID ALERTA RECIBIDO:", idAlerta);
+	
+	let contextoAlerta = null;
+
+    //==========================
+    // Inicializar gráficas
+    //==========================
+
+    var chartNivel = echarts.init(
+        document.getElementById('chartNivel')
+    );
+
+    var chartPh = echarts.init(
+        document.getElementById('chartPh')
+    );
+
+    var chartTurbiedad = echarts.init(
+        document.getElementById('chartTurbiedad')
+    );
+
+    var chartCloroResidual = echarts.init(
+        document.getElementById('chartCloroResidual')
+    );
+	
+	var chartConductividad = echarts.init(
+        document.getElementById('chartConductividad')
+	);
+	
+	
+	var chartTemperatura = echarts.init(
+        document.getElementById('chartTemperatura')
+	);
+	
+	var chartSeñalWifi = echarts.init(
+	    document.getElementById('chartSeñalWifi')
+	);
+	
+	var chartHumedad = echarts.init(
+	    document.getElementById('chartHumedad')
+	);
+
+
+
+	async function cargarTanques() {
+
+	    try {
+
+	        const response = await fetch("./api/tanques");
+
+	        if (!response.ok) {
+
+	            console.error(
+	                "Error consultando los tanques:",
+	                response.status
+	            );
+
+	            return;
+	        }
+
+	        const tanques = await response.json();
+
+	        const select =
+	            document.getElementById("cmbTanque");
+
+	        select.innerHTML = "";
+
+	        tanques.forEach(tanque => {
+
+	            const option =
+	                document.createElement("option");
+
+	            option.value = tanque.idTanque;
+
+	            option.textContent =
+	                tanque.nombreTanque;
+
+	            select.appendChild(option);
+
+	        });
+
+	        // Seleccionar automáticamente el primer tanque
+	        if (tanques.length > 0) {
+
+	            select.value =
+	                tanques[0].idTanque;
+					
+					cargarGraficas();
+
+	        }
+
+	        console.log(
+	            "Tanques cargados:",
+	            tanques
+	        );
+
+	    } catch (error) {
+
+	        console.error(
+	            "Error cargando los tanques:",
+	            error
+	        );
+
+	    }
+	}
+	
+	
+    function cargarGraficas(){
+		
+		const idTanque =
+		        document.getElementById("cmbTanque").value;
+
+        let fechaInicio = document.getElementById("fechaInicio").value;
+        let fechaFin = document.getElementById("fechaFin").value;
+
+        //==================================
+        // GRAFICA NIVEL DE AGUA
+        //==================================
+
+        fetch('./api/nivelAgua?idTanque=' + idTanque +  '&fechaInicio=' + fechaInicio + '&fechaFin=' + fechaFin)
+        .then(response => response.json())
+        .then(data => {
+			
+			
+
+            chartNivel.setOption({
+
+                title:{
+                    text:'Nivel de Agua',
+                    left:'center'
+                },
+
+                tooltip:{
+                    trigger:'axis'
+                },
+
+                xAxis:{
+                    type:'category',
+                    data:data.fechas,
+                    name:'Tiempo',
+                    nameLocation:'middle',
+                    nameGap:35
+                },
+
+                yAxis:{
+                    type:'value',
+                    name:'Nivel (cm)',
+                    nameLocation:'middle',
+                    nameGap:60,
+			        nameRotate:90
+                },
+
+                series:[{
+
+                    name:'Nivel Agua',
+                    type:'line',
+                    smooth:true,
+                    data:data.niveles
+
+                }]
+
+            });
+
+        });
+
+
+        //==================================
+        // GRAFICA CLORO
+        //==================================
+
+        fetch('./api/Ph?idTanque=' + idTanque +  '&fechaInicio=' + fechaInicio + '&fechaFin=' + fechaFin)
+        .then(response => response.json())
+        .then(data => {
+			
+			const rangoY = calcularRangoEje(data.minimo, data.maximo, data.niveles);
+
+            chartPh.setOption({
+
+                title:{
+                    text:'Ph',
+                    left:'center'
+                },
+
+                tooltip:{
+                    trigger:'axis'
+                },
+
+                xAxis:{
+                    type:'category',
+                    data:data.fechas,
+                    name:'Tiempo',
+                    nameLocation:'middle',
+                    nameGap:35
+                },
+
+                yAxis:{
+                    type:'value',
+                    name:'Nivel',
+                    nameLocation:'middle',
+                    nameGap:60,
+                    nameRotate:90,
+					min: rangoY.min,
+					max: rangoY.max
+                },
+
+                series:[{
+
+                    name:'Ph',
+                    type:'line',
+                    smooth:true,
+                    data:data.niveles,
+					markLine: crearLineas(data.minimo, data.maximo)
+
+                }]
+
+            });
+
+        });
+
+
+        //==================================
+        // GRAFICA TURBIEDAD
+        //==================================
+
+        fetch('./api/Turbiedad?idTanque=' + idTanque +  '&fechaInicio=' + fechaInicio + '&fechaFin=' + fechaFin)
+        .then(response => response.json())
+        .then(data => {
+			
+			const rangoY = calcularRangoEje(data.minimo, data.maximo, data.niveles);
+
+            chartTurbiedad.setOption({
+
+                title:{
+                    text:'Turbiedad',
+                    left:'center'
+                },
+
+                tooltip:{
+                    trigger:'axis'
+                },
+
+                xAxis:{
+                    type:'category',
+                    data:data.fechas,
+                    name:'Tiempo',
+                    nameLocation:'middle',
+                    nameGap:35
+                },
+
+                yAxis:{
+                    type:'value',
+                    name:'Nivel',
+                    nameLocation:'middle',
+                    nameGap:60,
+                    nameRotate:90,
+					min: rangoY.min,
+					max: rangoY.max
+                },
+
+                series:[{
+
+                    name:'Turbiedad',
+                    type:'line',
+                    smooth:true,
+                    data:data.niveles,
+					markLine: crearLineas(data.minimo, data.maximo)
+
+                }]
+
+            });
+
+        });
+
+
+        //==================================
+        // GRAFICA CloroResidual
+        //==================================
+
+        fetch('./api/CloroResidual?idTanque=' + idTanque +  '&fechaInicio=' + fechaInicio + '&fechaFin=' + fechaFin)
+        .then(response => response.json())
+        .then(data => {
+			
+			const rangoY = calcularRangoEje(data.minimo, data.maximo, data.niveles);
+
+            chartCloroResidual.setOption({
+
+                title:{
+                    text:'Cloro Residual',
+                    left:'center'
+                },
+
+                tooltip:{
+                    trigger:'axis'
+                },
+
+                xAxis:{
+                    type:'category',
+                    data:data.fechas,
+                    name:'Tiempo',
+                    nameLocation:'middle',
+                    nameGap:35
+                },
+
+                yAxis:{
+                    type:'value',
+                    name:'Señal',
+                    nameLocation:'middle',
+                    nameGap:60,
+                    nameRotate:90,
+					min: rangoY.min,
+					max: rangoY.max
+                },
+
+                series:[{
+
+                    name:'Cloro Residual',
+                    type:'line',
+                    smooth:true,
+                    data:data.niveles,
+					markLine: crearLineas(data.minimo, data.maximo)
+
+                }]
+
+            });
+
+        });
+		
+		//==================================
+        // GRAFICA Conductividad
+        //==================================
+
+        fetch('./api/Conductividad?idTanque=' + idTanque +  '&fechaInicio=' + fechaInicio + '&fechaFin=' + fechaFin)
+        .then(response => response.json())
+        .then(data => {
+			
+			const rangoY = calcularRangoEje(data.minimo, data.maximo, data.niveles);
+
+            chartConductividad.setOption({
+
+                title:{
+                    text:'Conductividad',
+                    left:'center'
+                },
+
+                tooltip:{
+                    trigger:'axis'
+                },
+
+                xAxis:{
+                    type:'category',
+                    data:data.fechas,
+                    name:'Tiempo',
+                    nameLocation:'middle',
+                    nameGap:35
+                },
+
+                yAxis:{
+                    type:'value',
+                    name:'Señal',
+                    nameLocation:'middle',
+                    nameGap:60,
+                    nameRotate:90,
+					min: rangoY.min,
+					max: rangoY.max
+                },
+
+                series:[{
+
+                    name:'Conductividad',
+                    type:'line',
+                    smooth:true,
+                    data:data.niveles,
+					markLine: crearLineas(data.minimo, data.maximo)
+
+                }]
+
+            });
+
+        });
+		
+		
+				//==================================
+		        // GRAFICA Temperatura
+		        //==================================
+
+		        fetch('./api/Temperatura?idTanque=' + idTanque +  '&fechaInicio=' + fechaInicio + '&fechaFin=' + fechaFin)
+		        .then(response => response.json())
+		        .then(data => {
+
+					const rangoY = calcularRangoEje(data.minimo, data.maximo, data.niveles);
+		            chartTemperatura.setOption({
+
+		                title:{
+		                    text:'Temperatura',
+		                    left:'center'
+		                },
+
+		                tooltip:{
+		                    trigger:'axis'
+		                },
+
+		                xAxis:{
+		                    type:'category',
+		                    data:data.fechas,
+		                    name:'Tiempo',
+		                    nameLocation:'middle',
+		                    nameGap:35
+		                },
+
+		                yAxis:{
+		                    type:'value',
+		                    name:'Señal',
+		                    nameLocation:'middle',
+		                    nameGap:60,
+		                    nameRotate:90,
+							min: rangoY.min,
+							max: rangoY.max
+		                },
+
+		                series:[{
+
+		                    name:'Temperatura',
+		                    type:'line',
+		                    smooth:true,
+		                    data:data.niveles,
+							markLine: crearLineas(data.minimo, data.maximo)
+
+		                }]
+
+		            });
+
+		        });
+				
+				
+				//==================================
+		        // GRAFICA WIFI
+		        //==================================
+
+		        fetch('./api/SeñalWifi?idTanque=' + idTanque +  '&fechaInicio=' + fechaInicio + '&fechaFin=' + fechaFin)
+		        .then(response => response.json())
+		        .then(data => {
+					
+					const rangoY = calcularRangoEje(data.minimo, data.maximo, data.niveles);
+
+		            chartSeñalWifi.setOption({
+
+		                title:{
+		                    text:'Señal Wifi',
+		                    left:'center'
+		                },
+
+		                tooltip:{
+		                    trigger:'axis'
+		                },
+
+		                xAxis:{
+		                    type:'category',
+		                    data:data.fechas,
+		                    name:'Tiempo',
+		                    nameLocation:'middle',
+		                    nameGap:35
+		                },
+
+		                yAxis:{
+		                    type:'value',
+		                    name:'Señal',
+		                    nameLocation:'middle',
+		                    nameGap:60,
+		                    nameRotate:90,
+							min: data.minimo + 40,
+							max: data.maximo - 60
+		                },
+
+		                series:[{
+
+		                    name:'Señal Wifi',
+		                    type:'line',
+		                    smooth:true,
+		                    data:data.niveles,
+							markLine: crearLineas(data.minimo, data.maximo)
+
+		                }]
+
+		            });
+
+		        });
+				
+				
+				//==================================
+		        // GRAFICA Humedad
+		        //==================================
+
+		        fetch('./api/Humedad?idTanque=' + idTanque +  '&fechaInicio=' + fechaInicio + '&fechaFin=' + fechaFin)
+		        .then(response => response.json())
+		        .then(data => {
+
+					const rangoY = calcularRangoEje(data.minimo, data.maximo, data.niveles);
+					
+		            chartHumedad.setOption({
+
+		                title:{
+		                    text:'Humedad',
+		                    left:'center'
+		                },
+
+		                tooltip:{
+		                    trigger:'axis'
+		                },
+
+		                xAxis:{
+		                    type:'category',
+		                    data:data.fechas,
+		                    name:'Tiempo',
+		                    nameLocation:'middle',
+		                    nameGap:35
+		                },
+
+		                yAxis:{
+		                    type:'value',
+		                    name:'Señal',
+		                    nameLocation:'middle',
+		                    nameGap:60,
+		                    nameRotate:90,
+							min: rangoY.min,
+							max: rangoY.max
+		                },
+
+		                series:[{
+
+		                    name:'Humedad',
+		                    type:'line',
+		                    smooth:true,
+		                    data:data.niveles,
+							markLine: crearLineas(data.minimo, data.maximo)
+
+		                }]
+
+		            });
+
+		        });
+
+    }
+	
+	
+	
+	
+	async function cargarGraficaAlerta(idAlerta) {
+
+	    try {
+
+	        console.log("=================================");
+	        console.log("CARGANDO ALERTA");
+	        console.log("Id alerta:", idAlerta);
+	        console.log("=================================");
+
+
+	        // =========================================
+	        // 1. Obtener información de la alerta
+	        // =========================================
+
+	        const response = await fetch(
+	            "./api/alerta/" + idAlerta
+	        );
+
+	        if (!response.ok) {
+
+	            throw new Error(
+	                "No se pudo obtener la alerta. HTTP " +
+	                response.status
+	            );
+
+	        }
+
+	        const alerta = await response.json();
+
+	        console.log("DATOS DE ALERTA:");
+	        console.log(alerta);
+
+
+	        // =========================================
+	        // 2. Datos de la alerta
+	        // =========================================
+
+	        const idLocal = Number(alerta.idLocal);
+	        const idTanque = Number(alerta.idTanque);
+	        const idSensor = Number(alerta.idSensor);
+
+
+	        console.log("idLocal:", idLocal);
+	        console.log("idTanque:", idTanque);
+	        console.log("idSensor:", idSensor);
+
+
+	        // =========================================
+	        // 3. Ocultar todas las gráficas
+	        // =========================================
+
+	        ocultarTodasLasGraficas();
+
+
+	        // =========================================
+	        // 4. Determinar qué sensor generó la alerta
+	        // =========================================
+
+	        let endpoint;
+	        let chart;
+	        let nombreSensor;
+
+
+	        switch (idSensor) {
+
+	            case 1:
+
+	                endpoint = "./api/nivelAgua";
+	                chart = chartNivel;
+	                nombreSensor = "Nivel de Agua";
+
+	                mostrarGrafica("chartNivel");
+
+	                break;
+
+
+	            case 2:
+
+	                endpoint = "./api/Ph";
+	                chart = chartPh;
+	                nombreSensor = "pH";
+
+	                mostrarGrafica("chartPh");
+
+	                break;
+
+
+	            case 3:
+
+	                endpoint = "./api/Turbiedad";
+	                chart = chartTurbiedad;
+	                nombreSensor = "Turbiedad";
+
+	                mostrarGrafica("chartTurbiedad");
+
+	                break;
+
+
+	            case 4:
+
+	                endpoint = "./api/CloroResidual";
+	                chart = chartCloroResidual;
+	                nombreSensor = "Cloro Residual";
+
+	                mostrarGrafica("chartCloroResidual");
+
+	                break;
+
+
+	            case 5:
+
+	                endpoint = "./api/Conductividad";
+	                chart = chartConductividad;
+	                nombreSensor = "Conductividad";
+
+	                mostrarGrafica("chartConductividad");
+
+	                break;
+
+
+	            case 6:
+
+	                endpoint = "./api/Temperatura";
+	                chart = chartTemperatura;
+	                nombreSensor = "Temperatura";
+
+	                mostrarGrafica("chartTemperatura");
+
+	                break;
+
+
+	            case 7:
+
+	                endpoint = "./api/SeñalWifi";
+	                chart = chartSeñalWifi;
+	                nombreSensor = "Señal Wifi";
+
+	                mostrarGrafica("chartSeñalWifi");
+
+	                break;
+
+
+	            case 8:
+
+	                endpoint = "./api/Humedad";
+	                chart = chartHumedad;
+	                nombreSensor = "Humedad";
+
+	                mostrarGrafica("chartHumedad");
+
+	                break;
+
+
+	            default:
+
+	                throw new Error(
+	                    "Sensor desconocido: " + idSensor
+	                );
+	        }
+			
+			contextoAlerta = {
+			            idLocal,
+			            idTanque,
+			            idSensor,
+			            endpoint,
+			            chart,
+			            nombreSensor
+			        };
+
+
+	        // =========================================
+	        // 5. Consultar lecturas del local y tanque
+	        // =========================================
+
+			const fechaFin = new Date(alerta.fechaInicio);
+
+			const fechaInicio = new Date(
+			    fechaFin.getTime() - (24 * 60 * 60 * 1000)
+			);
+			
+			
+			
+			
+
+			function formatearParaApi(fecha) {
+
+			    const anio = fecha.getFullYear();
+
+			    const mes = String(fecha.getMonth() + 1)
+			        .padStart(2, "0");
+
+			    const dia = String(fecha.getDate())
+			        .padStart(2, "0");
+
+			    const hora = String(fecha.getHours())
+			        .padStart(2, "0");
+
+			    const minuto = String(fecha.getMinutes())
+			        .padStart(2, "0");
+
+			    return `${anio}-${mes}-${dia}T${hora}:${minuto}`;
+			}
+
+			const fechaInicioApi = formatearParaApi(fechaInicio);
+			const fechaFinApi = formatearParaApi(fechaFin);
+				
+				
+			
+			const url = endpoint
+			    + "?idLocal=" + idLocal
+			    + "&idTanque=" + idTanque
+			    + "&fechaInicio=" + fechaInicioApi
+			    + "&fechaFin=" + fechaFinApi;
+
+
+	        console.log("Consultando:");
+	        console.log(url);
+
+
+	        const responseGrafica =
+	            await fetch(url);
+
+
+	        if (!responseGrafica.ok) {
+
+	            throw new Error(
+	                "Error consultando las lecturas. HTTP " +
+	                responseGrafica.status
+	            );
+
+	        }
+
+
+	        const data =
+	            await responseGrafica.json();
+
+
+				console.log("=================================");
+				console.log("DATOS DE LA GRÁFICA");
+				console.log("=================================");
+
+				console.log("Data completa:", data);
+
+				console.log("Fechas:", data.fechas);
+				console.log("Niveles:", data.niveles);
+
+				console.log(
+				    "Cantidad de fechas:",
+				    data.fechas ? data.fechas.length : "NO EXISTE"
+				);
+
+				console.log(
+				    "Cantidad de niveles:",
+				    data.niveles ? data.niveles.length : "NO EXISTE"
+				);
+
+				console.log(
+				    "Primeros niveles:",
+				    data.niveles ? data.niveles.slice(0, 10) : "NO EXISTE"
+				);
+
+				console.log("Mínimo:", data.minimo);
+				console.log("Máximo:", data.maximo);
+
+
+	        console.log("DATOS DE LA GRÁFICA:");
+	        console.log(data);
+
+
+	        // =========================================
+	        // 6. Verificar datos
+	        // =========================================
+
+	        if (!data.fechas || !data.niveles) {
+
+	            throw new Error(
+	                "La API no devolvió fechas/niveles"
+	            );
+
+	        }
+
+
+	        // =========================================
+	        // 7. Construir rango eje Y
+	        // =========================================
+
+	        const rangoY =
+	            calcularRangoEje(
+	                data.minimo,
+	                data.maximo,
+	                data.niveles
+	            );
+
+
+				// =========================================
+				// 8. Dibujar gráfica
+				// =========================================
+
+
+				console.log("Dibujando gráfica...");
+				console.log("Chart:", chart);
+				console.log("Dom:", chart.getDom());
+				console.log("Dom width:", chart.getDom().clientWidth);
+				console.log("Dom height:", chart.getDom().clientHeight);
+
+				chart.setOption({
+
+				    title: {
+
+				        text: nombreSensor +
+				              " - Alerta #" +
+				              idAlerta,
+
+				        left: "center"
+
+				    },
+
+				    tooltip: {
+
+				        trigger: "axis"
+
+				    },
+
+				    xAxis: {
+
+				        type: "category",
+
+				        data: data.fechas,
+
+				        name: "Tiempo",
+
+				        nameLocation: "middle",
+
+				        nameGap: 35
+
+				    },
+
+				    yAxis: {
+
+				        type: "value",
+
+				        name: nombreSensor,
+
+				        nameLocation: "middle",
+
+				        nameGap: 60,
+
+				        nameRotate: 90,
+
+				        min: rangoY.min,
+
+				        max: rangoY.max
+
+				    },
+
+				    series: [{
+
+				        name: nombreSensor,
+
+				        type: "line",
+
+				        smooth: true,
+
+				        data: data.niveles,
+
+				        markLine: crearLineas(
+				            data.minimo,
+				            data.maximo
+				        )
+
+				    }]
+
+				});
+
+				// Volvemos a ajustar después de dibujar
+				chart.resize();
+
+				console.log("=================================");
+				console.log("GRÁFICA CARGADA");
+				console.log("Sensor:", nombreSensor);
+				console.log("Alerta:", idAlerta);
+				console.log("Datos:", data.niveles.length);
+				console.log("=================================");
+
+
+	    } catch (error) {
+
+	        console.error(
+	            "ERROR CARGANDO GRÁFICA DE ALERTA:"
+	        );
+
+	        console.error(error);
+
+	    }
+
+	}
+	
+	
+	function consultar() {
+
+				    if (contextoAlerta) {
+				        recargarGraficaAlerta();
+				    } else {
+				        cargarGraficas();
+				    }
+
+	}
+	
+	
+	function consultarPorHoras() {
+
+	    const horas = parseInt(
+	        document.getElementById("cantidadHoras").value
+	    );
+
+	    if (!horas || horas <= 0) {
+	        alert("Ingresa una cantidad de horas válida");
+	        return;
+	    }
+
+	    const ahora = new Date();
+
+	    const inicio = new Date(
+	        ahora.getTime() - (horas * 60 * 60 * 1000)
+	    );
+
+	    document.getElementById("fechaInicio").value =
+	        formatearFecha(inicio);
+
+	    document.getElementById("fechaFin").value =
+	        formatearFecha(ahora);
+
+	    consultar();
+
+	}
+
+	
+	async function recargarGraficaAlerta() {
+
+	    const fechaInicio = document.getElementById("fechaInicio").value;
+	    const fechaFin = document.getElementById("fechaFin").value;
+
+	    const url = contextoAlerta.endpoint
+	        + "?idLocal=" + contextoAlerta.idLocal
+	        + "&idTanque=" + contextoAlerta.idTanque
+	        + "&fechaInicio=" + fechaInicio
+	        + "&fechaFin=" + fechaFin;
+
+	    console.log("Reconsultando alerta con nuevas fechas:");
+	    console.log(url);
+
+	    const response = await fetch(url);
+
+	    if (!response.ok) {
+	        console.error("Error al reconsultar:", response.status);
+	        return;
+	    }
+
+	    const data = await response.json();
+
+	    if (!data.fechas || !data.niveles) {
+	        console.error("La API no devolvió fechas/niveles");
+	        return;
+	    }
+
+	    const rangoY = calcularRangoEje(
+	        data.minimo,
+	        data.maximo,
+	        data.niveles
+	    );
+
+	    contextoAlerta.chart.setOption({
+
+	        title: {
+	            text: contextoAlerta.nombreSensor
+	                + " - Alerta #" + idAlerta,
+	            left: "center"
+	        },
+
+	        tooltip: { trigger: "axis" },
+
+	        xAxis: {
+	            type: "category",
+	            data: data.fechas,
+	            name: "Tiempo",
+	            nameLocation: "middle",
+	            nameGap: 35
+	        },
+
+	        yAxis: {
+	            type: "value",
+	            name: contextoAlerta.nombreSensor,
+	            nameLocation: "middle",
+	            nameGap: 60,
+	            nameRotate: 90,
+	            min: rangoY.min,
+	            max: rangoY.max
+	        },
+
+	        series: [{
+	            name: contextoAlerta.nombreSensor,
+	            type: "line",
+	            smooth: true,
+	            data: data.niveles,
+	            markLine: crearLineas(data.minimo, data.maximo)
+	        }]
+
+	    });
+
+	    contextoAlerta.chart.resize();
+
+	}
+	
+
+	function obtenerEndpointSensor(idSensor){
+
+	    switch(idSensor){
+
+	        case 1:
+	            return "./api/nivelAgua";
+
+	        case 2:
+	            return "./api/Ph";
+
+	        case 3:
+	            return "./api/Turbiedad";
+
+	        case 4:
+	            return "./api/CloroResidual";
+
+	        case 5:
+	            return "./api/Conductividad";
+
+	        case 6:
+	            return "./api/Temperatura";
+
+	        case 7:
+	            return "./api/SeñalWifi";
+
+	        case 8:
+	            return "./api/Humedad";
+
+	        default:
+	            return null;
+
+	    }
+
+	}
+	
+	
+	
+
+	//=========================================
+	// Fecha del servidor
+	//=========================================
+	
+	const fechaTexto = '[[${fechaServidor}]]'.replace(/"/g, "");
+
+	const fechaServidor = new Date(fechaTexto);
+	
+	
+
+	// Fecha enviada por Spring Boot
+	//const fechaServidor = new Date('[[${fechaServidor}]]');
+	// Hace 24 horas
+	const fechaInicioServidor = new Date(
+	    fechaServidor.getTime() - (1 * 60 * 60 * 1000)
+	);
+
+	// Formatear para datetime-local
+	function formatearFecha(fecha){
+
+	    const anio = fecha.getFullYear();
+
+	    const mes = String(
+	        fecha.getMonth() + 1
+	    ).padStart(2,'0');
+
+	    const dia = String(
+	        fecha.getDate()
+	    ).padStart(2,'0');
+
+	    const hora = String(
+	        fecha.getHours()
+	    ).padStart(2,'0');
+
+	    const minuto = String(
+	        fecha.getMinutes()
+	    ).padStart(2,'0');
+
+	    return `${anio}-${mes}-${dia}T${hora}:${minuto}`;
+
+	}
+	
+	
+	function crearLineas(minimo, maximo) {
+
+	    return {
+	        silent: true,
+	        symbol: "none",
+
+	        lineStyle: {
+	            color: "red",
+	            width: 2,
+	            type: "solid"
+	        },
+
+	        label: {
+	            color: "red",
+	            formatter: "{b}",
+	            color: "red"
+	        },
+
+	        data: [
+	            {
+	                yAxis: minimo,
+	                name: "Mínimo"
+	            },
+	            {
+	                yAxis: maximo,
+	                name: "Máximo"
+	            }
+	        ]
+	    };
+
+	}
+	
+
+	// 👇 la agregas aquí, justo después
+	function calcularRangoEje(minimo, maximo, datos, margen = 0.1) {
+
+	    if (!datos || datos.length === 0) {
+	        return { min: minimo, max: maximo };
+	    }
+
+	    const minDatos = Math.min(...datos);
+	    const maxDatos = Math.max(...datos);
+
+	    const limInf = Math.min(minimo, minDatos);
+	    const limSup = Math.max(maximo, maxDatos);
+
+	    const rango = limSup - limInf;
+	    const padding = rango > 0 ? rango * margen : 1;
+
+	    return {
+	        min: parseFloat((limInf - padding).toFixed(2)),
+	        max: parseFloat((limSup + padding).toFixed(2))
+	    };
+	}
+	
+	
+	function ocultarTodasLasGraficas() {
+
+		document.getElementById("chartNivel").style.display = "none";
+		    document.getElementById("chartPh").style.display = "none";
+		    document.getElementById("chartTurbiedad").style.display = "none";
+		    document.getElementById("chartCloroResidual").style.display = "none";
+		    document.getElementById("chartConductividad").style.display = "none";
+		    document.getElementById("chartTemperatura").style.display = "none";
+		    document.getElementById("chartSeñalWifi").style.display = "none";
+		    document.getElementById("chartHumedad").style.display = "none";
+
+	}
+	
+	function mostrarGrafica(id) {
+
+	    const elemento = document.getElementById(id);
+
+	    elemento.style.display = "block";
+
+	    // Dar tiempo al navegador para calcular el tamaño
+	    setTimeout(() => {
+
+	        switch (id) {
+
+	            case "chartNivel":
+	                chartNivel.resize();
+	                break;
+
+	            case "chartPh":
+	                chartPh.resize();
+	                break;
+
+	            case "chartTurbiedad":
+	                chartTurbiedad.resize();
+	                break;
+
+	            case "chartCloroResidual":
+	                chartCloroResidual.resize();
+	                break;
+
+	            case "chartConductividad":
+	                chartConductividad.resize();
+	                break;
+
+	            case "chartTemperatura":
+	                chartTemperatura.resize();
+	                break;
+
+	            case "chartSeñalWifi":
+	                chartSeñalWifi.resize();
+	                break;
+
+	            case "chartHumedad":
+	                chartHumedad.resize();
+	                break;
+	        }
+
+	    }, 100);
+	}
+	
+	
+	
+
+	// Colocar fechas por defecto
+	document.getElementById("fechaInicio").value =
+	    formatearFecha(fechaInicioServidor);
+
+	document.getElementById("fechaFin").value =
+	    formatearFecha(fechaServidor);
+		
+
+		// ¿La página fue abierta desde una alerta?
+		if (idAlerta) {
+
+			document.getElementById("selectorTanque").style.display = "none";
+		    cargarGraficaAlerta(idAlerta);
+
+		} else {
+
+			document.getElementById("selectorTanque").style.display = "block";
+		    cargarTanques();
+
+		}
+		
+		
+		setInterval(() => {
+
+		    const cantidadHoras = document.getElementById("cantidadHoras");
+
+		    if (cantidadHoras && cantidadHoras.value) {
+		        consultarPorHoras();
+		    } else {
+		        consultar();
+		    }
+
+		}, 30000);
+
+</script>
+</body>
+</html>
